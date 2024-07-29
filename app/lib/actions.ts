@@ -4,6 +4,15 @@ import { sql } from '@vercel/postgres'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
+export type State = {
+  errors?: {
+    customerId?: string[]
+    amount?: string[]
+    status?: string[]
+  }
+  message?: string | null
+}
+
 const FormSchema = z.object({
   id: z.string(),
   customerId: z.string(),
@@ -14,14 +23,21 @@ const FormSchema = z.object({
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true })
 
-export async function createInvoice(formData: FormData) {
+export async function createInvoice(prevState: State, formData: FormData) {
   //   const rawFormData = {
   //     customerId: formData.get('customerId'),
   //     amount: formData.get('amount'),
   //     status: formData.get('status'),
   //   }
   const rawFormData = Object.fromEntries(formData.entries())
-  const { customerId, amount, status } = CreateInvoice.parse(rawFormData)
+  const validatedFields = CreateInvoice.safeParse(rawFormData)
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Create Invoice.',
+    }
+  }
+  const { customerId, amount, status } = validatedFields.data
   const amountInCents = amount * 100
   const date = new Date().toISOString().split('T')[0]
 
@@ -43,7 +59,15 @@ const UpdateInvoice = FormSchema.omit({ id: true, date: true })
 
 export async function updateInvoice(id: string, formData: FormData) {
   const rawFormData = Object.fromEntries(formData.entries())
-  const { customerId, amount, status } = UpdateInvoice.parse(rawFormData)
+  const validatedFields = UpdateInvoice.safeParse(rawFormData)
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing Fields. Failed to Update Invoice.',
+    }
+  }
+
+  const { customerId, amount, status } = validatedFields.data
   const amountInCents = amount * 100
 
   try {
